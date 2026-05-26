@@ -65,6 +65,12 @@ tr:hover td{background:#1f2130}
 .set label{display:block;font-size:13px;color:#9ca3af;margin-bottom:5px}
 .set input{width:100%;padding:9px 12px;border:1px solid #374151;border-radius:8px;font-size:15px;font-weight:600;background:#12141e;color:#e8e8e8;font-family:inherit}
 .ar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* 分頁篩選按鈕 */
+.sheet-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.sheet-tab{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #374151;background:#12141e;color:#9ca3af;font-family:inherit;transition:all .15s}
+.sheet-tab:hover{border-color:#4f46e5;color:#e8e8e8}
+.sheet-tab.on{background:#4f46e5;color:#fff;border-color:#4f46e5}
+.sheet-count{font-size:11px;background:rgba(255,255,255,0.15);border-radius:10px;padding:1px 7px;margin-left:4px}
 </style>
 </head>
 <body>
@@ -82,6 +88,7 @@ tr:hover td{background:#1f2130}
     <button class="tab" onclick="sw('d')">🎟️ 抽籤</button>
   </div>
 
+  <!-- 管理員 -->
   <div id="pa">
     <div class="card">
       <div class="ct">步驟一：上傳名單</div>
@@ -99,7 +106,7 @@ tr:hover td{background:#1f2130}
         <span id="pb2" class="bdg bp2"></span>
       </div>
       <div style="overflow-x:auto;margin-bottom:14px">
-        <table><thead><tr><th>單位</th><th>姓名</th><th>工號</th><th>車號（原有）</th></tr></thead>
+        <table><thead><tr><th>分頁</th><th>單位</th><th>姓名</th><th>工號</th></tr></thead>
         <tbody id="pbd"></tbody></table>
       </div>
       <div class="ar">
@@ -121,12 +128,14 @@ tr:hover td{background:#1f2130}
     </div>
   </div>
 
+  <!-- 填寫車號 -->
   <div id="pu" class="hide">
     <div class="card">
-      <div class="ct">搜尋並填寫車號</div>
-      <div class="sr">
-        <input type="text" class="si" id="sq" placeholder="輸入姓名、工號或單位搜尋..." oninput="ds()">
-        <button class="btn bo" onclick="la()">🔄 載入名單</button>
+      <div class="ct">選擇你的部門</div>
+      <div class="sheet-tabs" id="sheetTabs"></div>
+      <div class="sr" style="margin-top:8px">
+        <input type="text" class="si" id="sq" placeholder="或直接輸入姓名、工號搜尋..." oninput="ds()">
+        <button class="btn bo" onclick="la()">🔄 載入</button>
       </div>
       <div id="um" class="hide"></div>
       <div id="ut" class="hide" style="overflow-x:auto">
@@ -136,6 +145,7 @@ tr:hover td{background:#1f2130}
     </div>
   </div>
 
+  <!-- 抽籤 -->
   <div id="pd" class="hide">
     <div class="sg">
       <div class="sc"><div class="sn" id="st">—</div><div class="sl">總人數</div></div>
@@ -170,7 +180,7 @@ tr:hover td{background:#1f2130}
 
 <script>
 var API = 'https://script.google.com/macros/s/AKfycbw57UNKHwtDPIzyT_T7ZHRUPNnLxaSXUy5IQQiw8gp4OHi73wh7Gs8Zm6GY2HWSZ-D0/exec';
-var loc = [], recs = [];
+var loc = [], recs = [], sheetNames = [], curSheet = '';
 
 setInterval(function(){
   document.getElementById('clk').textContent = new Date().toLocaleString('zh-TW');
@@ -191,13 +201,16 @@ function rf(inp){
   r.onload = function(e){
     try{
       var wb = XLSX.read(e.target.result, {type:'binary'});
+      sheetNames = wb.SheetNames;
       var all = [];
       wb.SheetNames.forEach(function(sn){
         var rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {defval:''});
+        rows.forEach(function(row){ row['_sheet'] = sn; });
         all = all.concat(rows);
       });
       if(!all.length){ sm('m1','er','檔案沒有資料'); return; }
       loc = all.map(function(r){ return {
+        _sheet: r['_sheet']||'',
         單位: String(r['單位']||r['部門']||'').trim(),
         姓名: String(r['姓名']||r['name']||'').trim(),
         工號: String(r['工號']||r['ID']||'').trim(),
@@ -206,11 +219,11 @@ function rf(inp){
       if(!loc.length){ sm('m1','er','找不到姓名欄位，請確認格式'); return; }
       var tb = document.getElementById('pbd');
       tb.innerHTML = loc.slice(0,8).map(function(r){
-        return '<tr><td>'+r.單位+'</td><td>'+r.姓名+'</td><td>'+r.工號+'</td><td style="color:#6b7280">'+(r.車號||'（待填）')+'</td></tr>';
+        return '<tr><td><span class="bdg bp2" style="font-size:11px">'+r._sheet+'</span></td><td>'+r.單位+'</td><td>'+r.姓名+'</td><td>'+r.工號+'</td></tr>';
       }).join('') + (loc.length>8 ? '<tr><td colspan="4" style="color:#6b7280;font-size:13px;padding:10px 12px">... 還有'+(loc.length-8)+'人</td></tr>' : '');
-      document.getElementById('pb2').textContent = '共'+loc.length+'人';
+      document.getElementById('pb2').textContent = '共'+loc.length+'人 / '+sheetNames.length+'個分頁';
       document.getElementById('pc').classList.remove('hide');
-      sm('m1','ok','✓ 成功讀取'+loc.length+'筆資料（'+wb.SheetNames.length+'個分頁合併）');
+      sm('m1','ok','✓ 成功讀取'+loc.length+'筆資料（分頁：'+sheetNames.join('、')+'）');
     }catch(e){ sm('m1','er','讀取失敗，請確認檔案格式'); }
   };
   r.readAsBinaryString(f);
@@ -222,7 +235,7 @@ async function upl(){
   try{
     var res = await fetch(API, {
       method: 'POST',
-      body: JSON.stringify({action:'init', data:loc})
+      body: JSON.stringify({action:'init', data:loc, sheets:sheetNames})
     });
     var d = await res.json();
     if(!d.ok) throw new Error('上傳失敗');
@@ -240,11 +253,12 @@ async function upl(){
 async function fa(){
   var res = await fetch(API);
   var d = await res.json();
-  return d.data || [];
+  return d;
 }
 
 async function rp(){
-  var data = await fa();
+  var d = await fa();
+  var data = d.data || [];
   var t = data.length, f = data.filter(function(r){ return r['車號']; }).length;
   document.getElementById('pt').textContent = f+'/'+t;
   document.getElementById('pff').style.width = t ? Math.round(f/t*100)+'%' : '0%';
@@ -253,19 +267,53 @@ async function rp(){
 async function la(){
   sm2('um','inf','載入中...');
   try{
-    recs = await fa();
+    var d = await fa();
+    recs = d.data || [];
+    var sheets = d.sheets || [];
+    // 建立分頁篩選按鈕
+    var tabsEl = document.getElementById('sheetTabs');
+    tabsEl.innerHTML = '';
+    // 全部按鈕
+    var allBtn = document.createElement('button');
+    allBtn.className = 'sheet-tab on';
+    allBtn.setAttribute('data-sheet','');
+    var allCount = recs.length;
+    allBtn.innerHTML = '全部 <span class="sheet-count">'+allCount+'</span>';
+    allBtn.onclick = function(){ selectSheet(''); };
+    tabsEl.appendChild(allBtn);
+    // 各分頁按鈕
+    sheets.forEach(function(sn){
+      var cnt = recs.filter(function(r){ return r['_sheet']===sn; }).length;
+      var btn = document.createElement('button');
+      btn.className = 'sheet-tab';
+      btn.setAttribute('data-sheet', sn);
+      btn.innerHTML = sn + ' <span class="sheet-count">'+cnt+'</span>';
+      btn.onclick = function(){ selectSheet(sn); };
+      tabsEl.appendChild(btn);
+    });
+    curSheet = '';
     document.getElementById('um').classList.add('hide');
     ru(recs);
   }catch(e){ sm2('um','er','載入失敗：'+e.message); }
 }
 
+function selectSheet(sn){
+  curSheet = sn;
+  document.querySelectorAll('.sheet-tab').forEach(function(btn){
+    btn.classList.toggle('on', btn.getAttribute('data-sheet')===sn);
+  });
+  document.getElementById('sq').value = '';
+  var filtered = sn ? recs.filter(function(r){ return r['_sheet']===sn; }) : recs;
+  ru(filtered);
+}
+
 function ds(){
   var q = document.getElementById('sq').value.trim().toLowerCase();
-  ru(q ? recs.filter(function(r){
+  var base = curSheet ? recs.filter(function(r){ return r['_sheet']===curSheet; }) : recs;
+  ru(q ? base.filter(function(r){
     return (r['姓名']||'').toLowerCase().includes(q) ||
-           (r['工號']||'').toLowerCase().includes(q) ||
-           (r['單位']||'').toLowerCase().includes(q);
-  }) : recs);
+           (r['工號']||'').toLowerCase().includes(q);
+  }) : base);
 }
 
 function ru(list){
@@ -305,7 +353,8 @@ async function sv(row){
 async function ld(){
   var dm = document.getElementById('dm'); dm.className='msg inf'; dm.textContent='載入中...';
   try{
-    recs = await fa();
+    var d = await fa();
+    recs = d.data || [];
     var t = recs.length, f = recs.filter(function(r){ return r['車號']; }).length;
     document.getElementById('st').textContent = t;
     document.getElementById('sf').textContent = f;
@@ -371,3 +420,4 @@ function sm2(id,t,s){ var e=document.getElementById(id); e.className='msg '+t; e
 </script>
 </body>
 </html>
+

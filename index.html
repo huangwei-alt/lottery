@@ -155,13 +155,23 @@ tr:hover td{background:#1f2130}
     <div class="card">
       <div class="ct">抽籤設定</div>
       <div class="set">
-        <div><label>正式名額</label><input type="number" id="ms" value="155"></div>
-        <div><label>候補名額</label><input type="number" id="as" value="20"></div>
+        <div><label>正式名額（總數）</label><input type="number" id="ms" value="155"></div>
+        <div><label>候補名額（總數）</label><input type="number" id="as" value="20"></div>
+      </div>
+      <div class="set" style="margin-top:-8px">
+        <div>
+          <label>每次抽出幾筆</label>
+          <input type="number" id="batch" value="1" min="1">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <div style="font-size:13px;color:#6b7280;padding-bottom:12px">（設 1 = 逐一抽出，設 10 = 一次抽10筆）</div>
+        </div>
       </div>
       <div id="dm" class="msg inf" style="margin-bottom:14px">請先載入資料再抽籤。</div>
       <div class="ar">
         <button class="btn bo" onclick="ld()">🔄 載入資料</button>
         <button class="btn bs" id="db" onclick="draw()" disabled>▶ 開始抽籤</button>
+        <button class="btn bo" id="drawMore" onclick="drawNext()" style="display:none">▶ 再抽下一筆</button>
       </div>
     </div>
     <div class="card hide" id="rc">
@@ -364,42 +374,66 @@ async function ld(){
   }catch(e){ dm.className='msg er'; dm.textContent='載入失敗：'+e.message; }
 }
 
-function draw(){
-  var pool = recs.filter(function(r){ return r['車號']; }); if(!pool.length) return;
+var shuffled = [], drawnCount = 0, mainMax = 0, altMax = 0;
+
+function shuffle(arr){
   for(var rd=0;rd<3;rd++){
-    for(var i=pool.length-1;i>0;i--){
+    for(var i=arr.length-1;i>0;i--){
       var a=new Uint32Array(1); crypto.getRandomValues(a);
-      var j=a[0]%(i+1); var tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp;
+      var j=a[0]%(i+1); var tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp;
     }
   }
-  var m = parseInt(document.getElementById('ms').value)||155;
-  var a = parseInt(document.getElementById('as').value)||20;
-  var ml = pool.slice(0,m), al = pool.slice(m,m+a);
-  document.getElementById('mc').textContent = ml.length;
-  document.getElementById('ac').textContent = al.length;
-  var rl = document.getElementById('rl'); rl.innerHTML = '';
-  ml.forEach(function(r,i){
-    var d = document.createElement('div'); d.className='ri';
-    var rc = i===0?'r1':i===1?'r2':i===2?'r3':'rn';
-    d.innerHTML = '<div class="rk '+rc+'">'+(i+1)+'</div>'+
-      '<div style="flex:1"><span style="font-weight:600">'+r['姓名']+'</span>'+
-      '<span style="color:#9ca3af;font-size:12px;margin-left:8px">'+r['工號']+'</span>'+
-      '<span style="color:#6b7280;font-size:12px;margin-left:6px">'+r['單位']+'</span></div>'+
-      '<span style="font-family:monospace;font-size:13px;color:#9ca3af;margin-right:8px">'+r['車號']+'</span>'+
-      '<span class="bdg bg" style="font-size:11px">正式</span>';
-    rl.appendChild(d);
-  });
-  al.forEach(function(r,i){
-    var d = document.createElement('div'); d.className='ri';
-    d.innerHTML = '<div class="rk ra">補'+(i+1)+'</div>'+
-      '<div style="flex:1"><span style="font-weight:600">'+r['姓名']+'</span>'+
-      '<span style="color:#9ca3af;font-size:12px;margin-left:8px">'+r['工號']+'</span>'+
-      '<span style="color:#6b7280;font-size:12px;margin-left:6px">'+r['單位']+'</span></div>'+
-      '<span style="font-family:monospace;font-size:13px;color:#9ca3af;margin-right:8px">'+r['車號']+'</span>'+
-      '<span class="bdg bb" style="font-size:11px">候補</span>';
-    rl.appendChild(d);
-  });
+  return arr;
+}
+
+function draw(){
+  var pool = recs.filter(function(r){ return r['車號']; }); if(!pool.length) return;
+  shuffled = shuffle(pool.slice());
+  drawnCount = 0;
+  mainMax = parseInt(document.getElementById('ms').value)||155;
+  altMax = parseInt(document.getElementById('as').value)||20;
+  document.getElementById('rl').innerHTML = '';
+  document.getElementById('mc').textContent = '0';
+  document.getElementById('ac').textContent = '0';
   document.getElementById('rc').classList.remove('hide');
+  document.getElementById('drawMore').style.display = 'inline-flex';
+  document.getElementById('db').textContent = '🔄 重新抽籤';
+  drawNext();
+}
+
+function drawNext(){
+  var batch = parseInt(document.getElementById('batch').value)||1;
+  var total = mainMax + altMax;
+  if(drawnCount >= Math.min(total, shuffled.length)){
+    document.getElementById('drawMore').style.display = 'none';
+    return;
+  }
+  var end = Math.min(drawnCount + batch, Math.min(total, shuffled.length));
+  var rl = document.getElementById('rl');
+  for(var i=drawnCount; i<end; i++){
+    var r = shuffled[i];
+    var d = document.createElement('div'); d.className='ri';
+    var isAlt = i >= mainMax;
+    var rankNum = isAlt ? (i - mainMax + 1) : (i + 1);
+    var rc = isAlt ? 'ra' : (i===0?'r1':i===1?'r2':i===2?'r3':'rn');
+    var rankLabel = isAlt ? '補'+rankNum : rankNum;
+    d.innerHTML = '<div class="rk '+rc+'">'+rankLabel+'</div>'+
+      '<div style="flex:1"><span style="font-weight:600">'+r['姓名']+'</span>'+
+      '<span style="color:#9ca3af;font-size:12px;margin-left:8px">'+r['工號']+'</span>'+
+      '<span style="color:#6b7280;font-size:12px;margin-left:6px">'+r['單位']+'</span></div>'+
+      '<span style="font-family:monospace;font-size:13px;color:#9ca3af;margin-right:8px">'+r['車號']+'</span>'+
+      '<span class="bdg '+(isAlt?'bb':'bg')+'" style="font-size:11px">'+(isAlt?'候補':'正式')+'</span>';
+    rl.appendChild(d);
+    d.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  drawnCount = end;
+  var mainShown = Math.min(drawnCount, mainMax);
+  var altShown = Math.max(0, drawnCount - mainMax);
+  document.getElementById('mc').textContent = mainShown;
+  document.getElementById('ac').textContent = altShown;
+  if(drawnCount >= Math.min(total, shuffled.length)){
+    document.getElementById('drawMore').style.display = 'none';
+  }
 }
 
 function exp(){
@@ -420,4 +454,3 @@ function sm2(id,t,s){ var e=document.getElementById(id); e.className='msg '+t; e
 </script>
 </body>
 </html>
-

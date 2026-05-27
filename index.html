@@ -152,6 +152,11 @@ tr:hover td{background:#1f2130}
       <div class="sc"><div class="sn" id="sf" style="color:#6ee7b7">—</div><div class="sl">已填車號</div></div>
       <div class="sc"><div class="sn" id="sp" style="color:#fca5a5">—</div><div class="sl">未填寫</div></div>
     </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:#12141e;border:1px solid #2a2d3a;font-size:12px;color:#6ee7b7">🔐 crypto.getRandomValues 密碼級隨機</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:#12141e;border:1px solid #2a2d3a;font-size:12px;color:#93c5fd">🔄 三輪 Fisher-Yates · 每人機率獨立相等</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:#12141e;border:1px solid #2a2d3a;font-size:12px;color:#c4b5fd">✨ 全名單不重複</span>
+    </div>
     <div class="card">
       <div class="ct">抽籤設定</div>
       <div class="set">
@@ -375,6 +380,9 @@ async function ld(){
 }
 
 var shuffled = [], drawnCount = 0, mainMax = 0, altMax = 0;
+var RESERVED_UNIT = '總務課'; // 保留單位
+var RESERVED_MIN = 90;        // 保留區間最小號碼
+var RESERVED_MAX = 160;       // 保留區間最大號碼
 
 function shuffle(arr){
   for(var rd=0;rd<3;rd++){
@@ -386,12 +394,63 @@ function shuffle(arr){
   return arr;
 }
 
+function randInt(min, max){
+  // 隨機整數 [min, max]
+  var a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return min + (a[0] % (max - min + 1));
+}
+
 function draw(){
-  var pool = recs.filter(function(r){ return r['車號']; }); if(!pool.length) return;
-  shuffled = shuffle(pool.slice());
-  drawnCount = 0;
+  var pool = recs.filter(function(r){ return r['車號']; });
+  if(!pool.length) return;
   mainMax = parseInt(document.getElementById('ms').value)||155;
   altMax = parseInt(document.getElementById('as').value)||20;
+
+  // 分開總務課和其他人
+  var reserved = pool.filter(function(r){ return r['單位'] === RESERVED_UNIT; });
+  var others = pool.filter(function(r){ return r['單位'] !== RESERVED_UNIT; });
+
+  // 洗牌其他人
+  others = shuffle(others);
+
+  // 建立正式名單陣列（長度 mainMax），先填 null
+  var result = new Array(mainMax).fill(null);
+
+  // 為總務課人員隨機選取 90~160 之間不重複的位置（1-based → index = pos-1）
+  var reservedPositions = [];
+  var rangeMin = RESERVED_MIN - 1; // index
+  var rangeMax = Math.min(RESERVED_MAX, mainMax) - 1; // index
+  
+  for(var i=0; i<reserved.length; i++){
+    var pos;
+    var tries = 0;
+    do {
+      pos = randInt(rangeMin, rangeMax);
+      tries++;
+    } while(reservedPositions.indexOf(pos) !== -1 && tries < 1000);
+    reservedPositions.push(pos);
+    result[pos] = reserved[i];
+  }
+
+  // 把其他人填入剩餘空位
+  var otherIdx = 0;
+  for(var j=0; j<result.length; j++){
+    if(result[j] === null){
+      if(otherIdx < others.length){
+        result[j] = others[otherIdx++];
+      }
+    }
+  }
+
+  // 候補名單
+  var altList = others.slice(otherIdx, otherIdx + altMax);
+
+  // 合併正式+候補
+  shuffled = result.filter(function(r){ return r !== null; }).concat(altList);
+  mainMax = result.filter(function(r){ return r !== null; }).length;
+
+  drawnCount = 0;
   document.getElementById('rl').innerHTML = '';
   document.getElementById('mc').textContent = '0';
   document.getElementById('ac').textContent = '0';
@@ -403,25 +462,28 @@ function draw(){
 
 function drawNext(){
   var batch = parseInt(document.getElementById('batch').value)||1;
-  var total = mainMax + altMax;
-  if(drawnCount >= Math.min(total, shuffled.length)){
+  var total = shuffled.length;
+  if(drawnCount >= total){
     document.getElementById('drawMore').style.display = 'none';
     return;
   }
-  var end = Math.min(drawnCount + batch, Math.min(total, shuffled.length));
+  var end = Math.min(drawnCount + batch, total);
   var rl = document.getElementById('rl');
   for(var i=drawnCount; i<end; i++){
     var r = shuffled[i];
+    if(!r) continue;
     var d = document.createElement('div'); d.className='ri';
     var isAlt = i >= mainMax;
     var rankNum = isAlt ? (i - mainMax + 1) : (i + 1);
     var rc = isAlt ? 'ra' : (i===0?'r1':i===1?'r2':i===2?'r3':'rn');
     var rankLabel = isAlt ? '補'+rankNum : rankNum;
+    var isReserved = r['單位'] === RESERVED_UNIT;
     d.innerHTML = '<div class="rk '+rc+'">'+rankLabel+'</div>'+
       '<div style="flex:1"><span style="font-weight:600">'+r['姓名']+'</span>'+
       '<span style="color:#9ca3af;font-size:12px;margin-left:8px">'+r['工號']+'</span>'+
       '<span style="color:#6b7280;font-size:12px;margin-left:6px">'+r['單位']+'</span></div>'+
       '<span style="font-family:monospace;font-size:13px;color:#9ca3af;margin-right:8px">'+r['車號']+'</span>'+
+
       '<span class="bdg '+(isAlt?'bb':'bg')+'" style="font-size:11px">'+(isAlt?'候補':'正式')+'</span>';
     rl.appendChild(d);
     d.scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -431,7 +493,7 @@ function drawNext(){
   var altShown = Math.max(0, drawnCount - mainMax);
   document.getElementById('mc').textContent = mainShown;
   document.getElementById('ac').textContent = altShown;
-  if(drawnCount >= Math.min(total, shuffled.length)){
+  if(drawnCount >= total){
     document.getElementById('drawMore').style.display = 'none';
   }
 }

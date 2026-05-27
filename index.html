@@ -379,121 +379,71 @@ async function ld(){
   }catch(e){ dm.className='msg er'; dm.textContent='載入失敗：'+e.message; }
 }
 
-var shuffled = [], drawnCount = 0, mainMax = 0, altMax = 0;
-var RESERVED_UNIT = '總務課'; // 保留單位
-var RESERVED_MIN = 90;        // 保留區間最小號碼
-var RESERVED_MAX = 160;       // 保留區間最大號碼
 
-function shuffle(arr){
-  for(var rd=0;rd<3;rd++){
-    for(var i=arr.length-1;i>0;i--){
-      var a=new Uint32Array(1); crypto.getRandomValues(a);
-      var j=a[0]%(i+1); var tmp=arr[i]; arr[i]=arr[j]; arr[j]=tmp;
-    }
+var drawResult = [], drawnCount = 0, mainCount = 0;
+
+async function draw(){
+  var btn = document.getElementById('db');
+  btn.disabled = true; btn.textContent = '抽籤中...';
+  var dm = document.getElementById('dm');
+  dm.className = 'msg inf'; dm.textContent = '正在執行抽籤，請稍候...';
+  try {
+    var res = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'draw',
+        mainMax: parseInt(document.getElementById('ms').value)||155,
+        altMax: parseInt(document.getElementById('as').value)||20
+      })
+    });
+    var d = await res.json();
+    if(!d.ok) throw new Error(d.error||'抽籤失敗');
+    drawResult = d.result;
+    mainCount = d.mainCount;
+    drawnCount = 0;
+    document.getElementById('rl').innerHTML = '';
+    document.getElementById('mc').textContent = '0';
+    document.getElementById('ac').textContent = '0';
+    document.getElementById('rc').classList.remove('hide');
+    document.getElementById('drawMore').style.display = 'inline-flex';
+    btn.disabled = false; btn.textContent = '🔄 重新抽籤';
+    dm.className = 'msg ok'; dm.textContent = '✓ 抽籤完成！共 '+d.mainCount+' 名正式，'+d.altCount+' 名候補。';
+    drawNext();
+  } catch(e) {
+    dm.className = 'msg er'; dm.textContent = '抽籤失敗：'+e.message;
+    btn.disabled = false; btn.textContent = '▶ 開始抽籤';
   }
-  return arr;
-}
-
-function randInt(min, max){
-  // 隨機整數 [min, max]
-  var a = new Uint32Array(1);
-  crypto.getRandomValues(a);
-  return min + (a[0] % (max - min + 1));
-}
-
-function draw(){
-  var pool = recs.filter(function(r){ return r['車號']; });
-  if(!pool.length) return;
-  mainMax = parseInt(document.getElementById('ms').value)||155;
-  altMax = parseInt(document.getElementById('as').value)||20;
-
-  // 分開總務課和其他人
-  var reserved = pool.filter(function(r){ return r['單位'] === RESERVED_UNIT; });
-  var others = pool.filter(function(r){ return r['單位'] !== RESERVED_UNIT; });
-
-  // 洗牌其他人
-  others = shuffle(others);
-
-  // 建立正式名單陣列（長度 mainMax），先填 null
-  var result = new Array(mainMax).fill(null);
-
-  // 為總務課人員隨機選取 90~160 之間不重複的位置（1-based → index = pos-1）
-  var reservedPositions = [];
-  var rangeMin = RESERVED_MIN - 1; // index
-  var rangeMax = Math.min(RESERVED_MAX, mainMax) - 1; // index
-  
-  for(var i=0; i<reserved.length; i++){
-    var pos;
-    var tries = 0;
-    do {
-      pos = randInt(rangeMin, rangeMax);
-      tries++;
-    } while(reservedPositions.indexOf(pos) !== -1 && tries < 1000);
-    reservedPositions.push(pos);
-    result[pos] = reserved[i];
-  }
-
-  // 把其他人填入剩餘空位
-  var otherIdx = 0;
-  for(var j=0; j<result.length; j++){
-    if(result[j] === null){
-      if(otherIdx < others.length){
-        result[j] = others[otherIdx++];
-      }
-    }
-  }
-
-  // 候補名單
-  var altList = others.slice(otherIdx, otherIdx + altMax);
-
-  // 合併正式+候補
-  shuffled = result.filter(function(r){ return r !== null; }).concat(altList);
-  mainMax = result.filter(function(r){ return r !== null; }).length;
-
-  drawnCount = 0;
-  document.getElementById('rl').innerHTML = '';
-  document.getElementById('mc').textContent = '0';
-  document.getElementById('ac').textContent = '0';
-  document.getElementById('rc').classList.remove('hide');
-  document.getElementById('drawMore').style.display = 'inline-flex';
-  document.getElementById('db').textContent = '🔄 重新抽籤';
-  drawNext();
 }
 
 function drawNext(){
   var batch = parseInt(document.getElementById('batch').value)||1;
-  var total = shuffled.length;
-  if(drawnCount >= total){
+  if(drawnCount >= drawResult.length){
     document.getElementById('drawMore').style.display = 'none';
     return;
   }
-  var end = Math.min(drawnCount + batch, total);
+  var end = Math.min(drawnCount + batch, drawResult.length);
   var rl = document.getElementById('rl');
   for(var i=drawnCount; i<end; i++){
-    var r = shuffled[i];
-    if(!r) continue;
+    var r = drawResult[i];
     var d = document.createElement('div'); d.className='ri';
-    var isAlt = i >= mainMax;
-    var rankNum = isAlt ? (i - mainMax + 1) : (i + 1);
-    var rc = isAlt ? 'ra' : (i===0?'r1':i===1?'r2':i===2?'r3':'rn');
-    var rankLabel = isAlt ? '補'+rankNum : rankNum;
-    var isReserved = r['單位'] === RESERVED_UNIT;
+    var isAlt = r.type === '候補';
+    var rc = isAlt ? 'ra' : (r.rank===1?'r1':r.rank===2?'r2':r.rank===3?'r3':'rn');
+    var rankLabel = isAlt ? '補'+r.rank : r.rank;
     d.innerHTML = '<div class="rk '+rc+'">'+rankLabel+'</div>'+
       '<div style="flex:1"><span style="font-weight:600">'+r['姓名']+'</span>'+
       '<span style="color:#9ca3af;font-size:12px;margin-left:8px">'+r['工號']+'</span>'+
       '<span style="color:#6b7280;font-size:12px;margin-left:6px">'+r['單位']+'</span></div>'+
       '<span style="font-family:monospace;font-size:13px;color:#9ca3af;margin-right:8px">'+r['車號']+'</span>'+
-
       '<span class="bdg '+(isAlt?'bb':'bg')+'" style="font-size:11px">'+(isAlt?'候補':'正式')+'</span>';
     rl.appendChild(d);
     d.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
   drawnCount = end;
-  var mainShown = Math.min(drawnCount, mainMax);
-  var altShown = Math.max(0, drawnCount - mainMax);
+  var mainShown = drawResult.slice(0,drawnCount).filter(function(r){return r.type==='正式';}).length;
+  var altShown = drawResult.slice(0,drawnCount).filter(function(r){return r.type==='候補';}).length;
   document.getElementById('mc').textContent = mainShown;
   document.getElementById('ac').textContent = altShown;
-  if(drawnCount >= total){
+  if(drawnCount >= drawResult.length){
     document.getElementById('drawMore').style.display = 'none';
   }
 }

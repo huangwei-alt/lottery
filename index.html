@@ -83,13 +83,27 @@ tr:hover td{background:#1f2130}
 </div>
 <div class="main">
   <div class="tabs">
-    <button class="tab on" onclick="sw('a')">🛡️ 管理員</button>
-    <button class="tab" onclick="sw('u')">👤 填寫車號</button>
-    <button class="tab" onclick="sw('d')">🎟️ 抽籤</button>
+    <button class="tab" onclick="checkAuth('a')">🛡️ 管理員</button>
+    <button class="tab on" onclick="sw('u')">👤 填寫車號</button>
+    <button class="tab" onclick="checkAuth('d')">🎟️ 抽籤</button>
+  </div>
+
+  <!-- 密碼驗證視窗 -->
+  <div id="authModal" class="hide" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:999">
+    <div style="background:#1a1d27;border:1px solid #2a2d3a;border-radius:12px;padding:28px;width:320px">
+      <div style="font-size:15px;font-weight:600;color:#fff;margin-bottom:6px"><i class="ti ti-lock" style="margin-right:6px"></i>管理員驗證</div>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px">請輸入管理員密碼以繼續</p>
+      <input type="password" id="authPass" placeholder="輸入密碼" style="width:100%;padding:9px 12px;border:1px solid #374151;border-radius:8px;font-size:14px;background:#12141e;color:#e8e8e8;font-family:inherit;margin-bottom:10px" onkeydown="if(event.key==='Enter')submitAuth()">
+      <div id="authErr" class="hide" style="font-size:12px;color:#fca5a5;margin-bottom:10px">密碼錯誤，請再試一次</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn bo" style="flex:1" onclick="closeAuth()">取消</button>
+        <button class="btn bp" style="flex:1" onclick="submitAuth()">確認</button>
+      </div>
+    </div>
   </div>
 
   <!-- 管理員 -->
-  <div id="pa">
+  <div id="pa" class="hide">
     <div class="card">
       <div class="ct">步驟一：上傳名單</div>
       <div class="zone" onclick="document.getElementById('fi').click()">
@@ -129,7 +143,7 @@ tr:hover td{background:#1f2130}
   </div>
 
   <!-- 填寫車號 -->
-  <div id="pu" class="hide">
+  <div id="pu">
     <div class="card">
       <div class="ct">選擇你的部門</div>
       <div class="sheet-tabs" id="sheetTabs"></div>
@@ -200,6 +214,47 @@ var loc = [], recs = [], sheetNames = [], curSheet = '';
 setInterval(function(){
   document.getElementById('clk').textContent = new Date().toLocaleString('zh-TW');
 }, 1000);
+
+var pendingTab = '';
+
+function checkAuth(t){
+  if(sessionStorage.getItem('isAdmin') === 'true'){
+    sw(t);
+    return;
+  }
+  pendingTab = t;
+  document.getElementById('authPass').value = '';
+  document.getElementById('authErr').classList.add('hide');
+  document.getElementById('authModal').classList.remove('hide');
+  setTimeout(function(){ document.getElementById('authPass').focus(); }, 50);
+}
+
+function closeAuth(){
+  document.getElementById('authModal').classList.add('hide');
+}
+
+async function submitAuth(){
+  var pass = document.getElementById('authPass').value;
+  try{
+    var res = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({action:'auth', password: pass})
+    });
+    var d = await res.json();
+    if(d.ok){
+      sessionStorage.setItem('isAdmin', 'true');
+      closeAuth();
+      sw(pendingTab);
+    } else {
+      document.getElementById('authErr').classList.remove('hide');
+    }
+  }catch(e){
+    document.getElementById('authErr').textContent = '驗證失敗，請重試';
+    document.getElementById('authErr').classList.remove('hide');
+  }
+}
+
+la();
 
 function sw(t){
   ['a','u','d'].forEach(function(id,i){

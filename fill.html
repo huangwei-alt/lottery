@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>機車抽籤系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Microsoft JhengHei',sans-serif;background:#0f1117;color:#e8e8e8;min-height:100vh}
+.top{background:#1a1d27;border-bottom:1px solid #2a2d3a;padding:16px 32px;display:flex;align-items:center;justify-content:space-between}
+.top h1{font-size:18px;font-weight:600;color:#fff}
+.top p{font-size:13px;color:#6b7280;margin-top:2px}
+.main{max-width:900px;margin:0 auto;padding:28px 20px}
+.tabs{display:flex;gap:4px;background:#1a1d27;border-radius:10px;padding:4px;margin-bottom:24px}
+.tab{flex:1;padding:10px;text-align:center;font-size:14px;font-weight:500;cursor:pointer;border:none;background:none;color:#9ca3af;border-radius:8px;font-family:inherit}
+.tab.on{background:#4f46e5;color:#fff}
+.tab.locked{color:#4b5160;cursor:not-allowed}
+.tab.locked:hover{color:#6b7280}
+.card{background:#1a1d27;border:1px solid #2a2d3a;border-radius:12px;padding:24px;margin-bottom:16px}
+.ct{font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.ct::before{content:'';width:3px;height:14px;background:#4f46e5;border-radius:2px;display:inline-block}
+.zone{border:2px dashed #374151;border-radius:10px;padding:40px 20px;text-align:center;cursor:pointer;background:#12141e}
+.zone:hover{border-color:#4f46e5;background:#1e1f35}
+.zone .ic{font-size:44px;margin-bottom:10px}
+.zone p{font-size:15px;font-weight:500;color:#e8e8e8;margin-bottom:4px}
+.zone small{font-size:13px;color:#6b7280}
+input[type=file]{display:none}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:none;font-family:inherit}
+.bp{background:#4f46e5;color:#fff}.bp:hover{background:#4338ca}.bp:disabled{background:#374151;color:#6b7280;cursor:not-allowed}
+.bs{background:#059669;color:#fff}.bs:hover{background:#047857}
+.bo{background:transparent;color:#9ca3af;border:1px solid #374151}.bo:hover{background:#252836;color:#e8e8e8}
+.bsm{padding:6px 12px;font-size:13px}
+.msg{padding:12px 16px;border-radius:8px;font-size:14px;margin-top:12px}
+.ok{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
+.er{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
+.inf{background:#1e3a5f;color:#93c5fd;border:1px solid #1d4ed8}
+.hide{display:none}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;padding:9px 12px;font-size:12px;font-weight:600;color:#6b7280;border-bottom:1px solid #2a2d3a}
+td{padding:11px 12px;border-bottom:1px solid #1f2130;color:#d1d5db}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1f2130}
+.ci{width:130px;padding:6px 10px;border:1px solid #374151;border-radius:6px;font-size:14px;background:#12141e;color:#e8e8e8;font-family:inherit}
+.ci:focus{outline:none;border-color:#4f46e5}
+.ci.ok2{border-color:#059669}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.sc{background:#12141e;border:1px solid #2a2d3a;border-radius:10px;padding:16px}
+.sn{font-size:26px;font-weight:700;color:#fff}
+.sl{font-size:12px;color:#6b7280;margin-top:2px}
+.bdg{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.bg{background:#064e3b;color:#6ee7b7}
+.bb{background:#1e3a5f;color:#93c5fd}
+.bp2{background:#2e1065;color:#c4b5fd}
+.ri{display:flex;align-items:center;gap:10px;padding:11px 14px;background:#12141e;border-radius:8px;margin-bottom:8px;border:1px solid #2a2d3a}
+.rk{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.r1{background:#d97706;color:#fff}.r2{background:#6b7280;color:#fff}.r3{background:#92400e;color:#fff}
+.rn{background:#1f2937;color:#9ca3af;border:1px solid #374151}.ra{background:#1e3a5f;color:#93c5fd}
+.pb{height:7px;background:#1f2937;border-radius:4px;overflow:hidden;margin-top:6px}
+.pf{height:100%;background:linear-gradient(90deg,#4f46e5,#059669);border-radius:4px;transition:width .4s}
+.lb{background:#12141e;border:1px solid #374151;border-radius:8px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+.lb code{font-family:monospace;font-size:12px;color:#9ca3af;word-break:break-all}
+.sr{display:flex;gap:8px;margin-bottom:14px}
+.si{flex:1;padding:9px 12px;border:1px solid #374151;border-radius:8px;font-size:14px;background:#12141e;color:#e8e8e8;font-family:inherit}
+.si:focus{outline:none;border-color:#4f46e5}
+.set{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.set label{display:block;font-size:13px;color:#9ca3af;margin-bottom:5px}
+.set input{width:100%;padding:9px 12px;border:1px solid #374151;border-radius:8px;font-size:15px;font-weight:600;background:#12141e;color:#e8e8e8;font-family:inherit}
+.ar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+/* 分頁篩選按鈕 */
+.sheet-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.sheet-tab{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid #374151;background:#12141e;color:#9ca3af;font-family:inherit;transition:all .15s}
+.sheet-tab:hover{border-color:#4f46e5;color:#e8e8e8}
+.sheet-tab.on{background:#4f46e5;color:#fff;border-color:#4f46e5}
+.sheet-count{font-size:11px;background:rgba(255,255,255,0.15);border-radius:10px;padding:1px 7px;margin-left:4px}
+</style>
+</head>
+<body>
+<div class="top">
+  <div>
+    <h1>🏍️ 機車抽籤系統</h1>
+    <p>上傳名單 · 填寫車號 · 公平抽籤</p>
+  </div>
+  <div style="font-size:13px;color:#6b7280" id="clk"></div>
+</div>
+<div class="main">
+  <div class="tabs">
+    <button class="tab locked" onclick="lockedTab()"><i class="ti ti-lock" style="font-size:12px;vertical-align:-1px;margin-right:3px" aria-hidden="true"></i>管理員</button>
+    <button class="tab on" onclick="sw('u')">👤 填寫車號</button>
+    <button class="tab locked" onclick="lockedTab()"><i class="ti ti-lock" style="font-size:12px;vertical-align:-1px;margin-right:3px" aria-hidden="true"></i>抽籤</button>
+  </div>
+
+  <!-- 管理員 -->
+  <div id="pa" class="hide">
+    <div class="card">
+      <div style="text-align:center;padding:24px 0;color:#6b7280">
+        <i class="ti ti-lock" style="font-size:32px;display:block;margin-bottom:10px"></i>
+        此頁面僅限管理員使用
+      </div>
+    </div>
+  </div>
+
+  <!-- 填寫車號 -->
+  <div id="pu">
+    <div class="card">
+      <div class="ct">選擇你的部門</div>
+      <div class="sheet-tabs" id="sheetTabs"></div>
+      <div class="sr" style="margin-top:8px">
+        <input type="text" class="si" id="sq" placeholder="或直接輸入姓名、工號搜尋..." oninput="ds()">
+        <button class="btn bo" onclick="la()">🔄 載入</button>
+      </div>
+      <div id="um" class="hide"></div>
+      <div id="ut" class="hide" style="overflow-x:auto">
+        <table><thead><tr><th>姓名</th><th>工號</th><th>單位</th><th>車號</th><th></th></tr></thead>
+        <tbody id="ub2"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抽籤 -->
+  <div id="pd" class="hide">
+    <div class="card">
+      <div style="text-align:center;padding:24px 0;color:#6b7280">
+        <i class="ti ti-lock" style="font-size:32px;display:block;margin-bottom:10px"></i>
+        此頁面僅限管理員使用
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbw57UNKHwtDPIzyT_T7ZHRUPNnLxaSXUy5IQQiw8gp4OHi73wh7Gs8Zm6GY2HWSZ-D0/exec';
+var loc = [], recs = [], sheetNames = [], curSheet = '';
+
+setInterval(function(){
+  document.getElementById('clk').textContent = new Date().toLocaleString('zh-TW');
+}, 1000);
+
+function sw(t){
+  ['a','u','d'].forEach(function(id,i){
+    document.getElementById('p'+id).classList.toggle('hide', id!==t);
+    document.querySelectorAll('.tab')[i].classList.toggle('on', id===t);
+  });
+  if(t==='u') la();
+}
+
+function lockedTab(){
+  alert('🔒 此功能僅限管理員使用，請使用管理員提供的網址操作。');
+}
+async function fa(){
+  var res = await fetch(API);
+  var d = await res.json();
+  return d;
+}
+
+async function la(){
+  sm2('um','inf','載入中...');
+  try{
+    var d = await fa();
+    recs = d.data || [];
+    var sheets = d.sheets || [];
+    // 建立分頁篩選按鈕
+    var tabsEl = document.getElementById('sheetTabs');
+    tabsEl.innerHTML = '';
+    // 全部按鈕
+    var allBtn = document.createElement('button');
+    allBtn.className = 'sheet-tab on';
+    allBtn.setAttribute('data-sheet','');
+    var allCount = recs.length;
+    allBtn.innerHTML = '全部 <span class="sheet-count">'+allCount+'</span>';
+    allBtn.onclick = function(){ selectSheet(''); };
+    tabsEl.appendChild(allBtn);
+    // 各分頁按鈕
+    sheets.forEach(function(sn){
+      var cnt = recs.filter(function(r){ return r['_sheet']===sn; }).length;
+      var btn = document.createElement('button');
+      btn.className = 'sheet-tab';
+      btn.setAttribute('data-sheet', sn);
+      btn.innerHTML = sn + ' <span class="sheet-count">'+cnt+'</span>';
+      btn.onclick = function(){ selectSheet(sn); };
+      tabsEl.appendChild(btn);
+    });
+    curSheet = '';
+    document.getElementById('um').classList.add('hide');
+    ru(recs);
+  }catch(e){ sm2('um','er','載入失敗：'+e.message); }
+}
+
+function selectSheet(sn){
+  curSheet = sn;
+  document.querySelectorAll('.sheet-tab').forEach(function(btn){
+    btn.classList.toggle('on', btn.getAttribute('data-sheet')===sn);
+  });
+  document.getElementById('sq').value = '';
+  var filtered = sn ? recs.filter(function(r){ return r['_sheet']===sn; }) : recs;
+  ru(filtered);
+}
+
+function ds(){
+  var q = document.getElementById('sq').value.trim().toLowerCase();
+  var base = curSheet ? recs.filter(function(r){ return r['_sheet']===curSheet; }) : recs;
+  ru(q ? base.filter(function(r){
+    return (r['姓名']||'').toLowerCase().includes(q) ||
+           (r['工號']||'').toLowerCase().includes(q);
+  }) : base);
+}
+
+function ru(list){
+  var tb = document.getElementById('ub2'), wrap = document.getElementById('ut');
+  if(!list.length){
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:18px">找不到符合的人員</td></tr>';
+    wrap.classList.remove('hide'); return;
+  }
+  tb.innerHTML = list.map(function(r){
+    var v = r['車號']||'';
+    return '<tr><td style="font-weight:500">'+r['姓名']+
+      '</td><td style="color:#9ca3af">'+r['工號']+
+      '</td><td style="color:#9ca3af">'+r['單位']+
+      '</td><td><input class="ci'+(v?' ok2':'')+'" value="'+v+'" placeholder="填入車號" id="c_'+r.row+'" maxlength="10"></td>'+
+      '<td><button class="btn bo bsm" onclick="sv('+r.row+')">✓ 儲存</button></td></tr>';
+  }).join('');
+  wrap.classList.remove('hide');
+}
+
+async function sv(row){
+  var inp = document.getElementById('c_'+row);
+  var v = inp.value.trim().toUpperCase();
+  if(!v){ alert('請填入車號'); return; }
+  try{
+    var res = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({action:'update', row:row, 車號:v})
+    });
+    var d = await res.json();
+    if(!d.ok) throw new Error('儲存失敗');
+    inp.classList.add('ok2');
+    var rec = recs.find(function(x){ return x.row===row; });
+    if(rec) rec['車號'] = v;
+  }catch(e){ alert('儲存失敗，請重試'); }
+}
+
+function cpl(){ navigator.clipboard.writeText(window.location.href).then(function(){ alert('連結已複製！'); }); }
+function sm2(id,t,s){ var e=document.getElementById(id); e.className='msg '+t; e.textContent=s; e.classList.remove('hide'); }
+</script>
+</body>
+</html>
